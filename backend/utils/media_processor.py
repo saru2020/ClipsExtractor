@@ -241,9 +241,13 @@ class MediaProcessor:
             # YouTube or other supported services
             output_path = os.path.join(job_dir, f"input.%(ext)s")
             ydl_opts = {
-                'format': 'best[ext=mp4]/best',
+                'format': 'worst[ext=mp4]/worst',  # Get lowest quality video
                 'outtmpl': output_path,
                 'quiet': True,
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }],
             }
             
             logger.info(f"Downloading with yt-dlp using options: {ydl_opts}")
@@ -359,8 +363,16 @@ class MediaProcessor:
             
         # Prepare a better prompt that includes segment information
         system_content = """You are a helpful assistant that identifies relevant sections in a video based on its transcript. 
-        Use the exact timestamps provided in the transcript segments when possible. Return timestamps as JSON objects with 
-        start_time, end_time, and text fields."""
+        Your task is to find sections that best match the user's topic or interest.
+        
+        Guidelines:
+        1. Use ONLY the exact timestamps from the transcript segments
+        2. Select sections that are most relevant to the topic
+        3. Include enough context around the topic
+        4. Avoid overlapping clips
+        5. Keep clips concise but meaningful
+        
+        Return each section as a JSON object with start_time, end_time, and text fields."""
         
         # Create a structured prompt with transcript segments
         segments_text = ""
@@ -374,7 +386,12 @@ class MediaProcessor:
         if segments_text:
             user_content = f"""Given the following transcript with timestamps, identify sections that are most relevant to this topic: '{prompt}'.
             
-            USE THE EXACT TIMESTAMPS from the transcript segments. DO NOT MAKE UP OR ESTIMATE TIMESTAMPS.
+            IMPORTANT:
+            - Use ONLY the exact timestamps from the transcript segments
+            - Select sections that best match the topic
+            - Include enough context around the topic
+            - Avoid overlapping clips
+            - Keep clips concise but meaningful
             
             Return each section as a JSON object with start_time and end_time in seconds, and the relevant text.
             Format your entire response as a list of these objects under a 'clips' key.
@@ -425,6 +442,15 @@ class MediaProcessor:
                 if 'start_time' not in clip_data or 'end_time' not in clip_data or 'text' not in clip_data:
                     logger.warning(f"Skipping invalid clip data, missing required fields: {clip_data}")
                     continue
+                
+                # Validate clip duration
+                duration = float(clip_data['end_time']) - float(clip_data['start_time'])
+                if duration < 1.0:  # Skip clips shorter than 1 second
+                    logger.warning(f"Skipping clip too short ({duration:.2f}s): {clip_data}")
+                    continue
+                if duration > 300.0:  # Skip clips longer than 300 seconds / 5 minutes
+                    logger.warning(f"Skipping clip too long ({duration:.2f}s): {clip_data}")
+                    continue
                     
                 clip = Clip(
                     start_time=float(clip_data['start_time']),
@@ -432,11 +458,11 @@ class MediaProcessor:
                     text=clip_data['text']
                 )
                 clips.append(clip)
-                logger.info(f"Added clip: {clip.start_time} - {clip.end_time}")
+                logger.info(f"Added clip: {clip.start_time} - {clip.end_time} ({duration:.2f}s)")
             except (KeyError, ValueError, TypeError) as e:
                 logger.warning(f"Failed to parse clip data: {str(e)}")
                 logger.warning(f"Clip data: {clip_data}")
-                # Continue processing other clips
+                continue
         
         if not clips:
             error_msg = "No valid clips found in API response"
