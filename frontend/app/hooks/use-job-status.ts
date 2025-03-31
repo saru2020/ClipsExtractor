@@ -11,7 +11,7 @@ export function useJobStatus(
   options: UseJobStatusOptions = {}
 ) {
   const { 
-    pollingInterval = 3000, 
+    pollingInterval = 5000, 
     stopPollingOnComplete = true 
   } = options;
   

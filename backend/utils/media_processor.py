@@ -9,7 +9,7 @@ from pathlib import Path
 import yt_dlp
 from moviepy.editor import VideoFileClip
 import ffmpeg
-from openai import OpenAI
+from .bedrock_client import BedrockClient
 from models.job import Job, JobStatus, Clip
 
 # Set up logging
@@ -203,27 +203,11 @@ class MediaProcessor:
         api_key = os.getenv('OPENAI_API_KEY')
         
         try:
-            logger.info('Initializing OpenAI client')
-            if not api_key:
-                error_msg = "No OpenAI API key provided in environment. Must set OPENAI_API_KEY environment variable."
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-            
-            # Create minimal client with only required parameters
-            base_url = os.getenv('OPENAI_BASE_URL')
-            
-            # Initialize with only required parameters
-            init_kwargs = {'api_key': api_key}
-            if base_url:
-                logger.info(f"Using custom base URL: {base_url}")
-                init_kwargs['base_url'] = base_url
-
-            print('init_kwargs: ', init_kwargs)
-            # Create client with minimal configuration to avoid unexpected parameters
-            self.client = OpenAI(**init_kwargs)
-            logger.info("OpenAI client initialized successfully")
+            logger.info('Initializing Bedrock client')
+            self.bedrock_client = BedrockClient()
+            logger.info("Bedrock client initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize OpenAI client: {str(e)}")
+            logger.error(f"Failed to initialize Bedrock client: {str(e)}")
             logger.error(traceback.format_exc())
             raise
     
@@ -267,8 +251,8 @@ class MediaProcessor:
             raise
     
     def get_transcript(self, media_path):
-        """Extract transcript with timestamps from media file using OpenAI Whisper API."""
-        logger.info(f"Starting transcription for: {media_path}")
+        """Extract transcript from media using Bedrock Whisper."""
+        logger.info(f"get_transcript - Starting transcription for: {media_path}")
         
         # Extract audio first
         audio_path = media_path.replace(Path(media_path).suffix, '.mp3')
@@ -303,29 +287,12 @@ class MediaProcessor:
             if file_size == 0:
                 raise ValueError(f"Audio file is empty: {audio_path}")
             
-            # Transcribe with OpenAI Whisper using the proper v1.0+ API format
-            # and request timestamps and word-level timings
-            logger.info("Starting OpenAI Whisper transcription with timestamps")
-            with open(audio_path, 'rb') as audio_file:
-                try:
-                    # Request timestamps and word timings in the response
-                    transcription = self.client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        response_format="verbose_json",  # This provides timestamps
-                        timestamp_granularities=["segment", "word"]  # Get both segment and word-level timestamps
-                    )
-                    
-                    # For verbose_json, the result will be a JSON structure with segments and words
-                    logger.info(f"Transcription complete with timestamps")
-                    
-                    # Return the full transcription data including timestamps
-                    return transcription
-                    
-                except Exception as e:
-                    logger.error(f"OpenAI transcription error: {str(e)}")
-                    logger.error(traceback.format_exc())
-                    raise
+            # Transcribe with Bedrock Whisper
+            logger.info("Starting Bedrock Whisper transcription")
+            transcript_data = self.bedrock_client.transcribe_audio(audio_path)
+            logger.info("Transcription completed successfully")
+            
+            return transcript_data
             
         except Exception as e:
             logger.error(f"Failed to transcribe media: {str(e)}")
@@ -335,142 +302,59 @@ class MediaProcessor:
             # Clean up audio file
             if os.path.exists(audio_path):
                 try:
-                    # os.remove(audio_path)
+                    os.remove(audio_path)
                     logger.info(f"Cleaned up audio file: {audio_path}")
                 except Exception as e:
                     logger.warning(f"Failed to clean up audio file: {str(e)}")
     
     def get_clip_timestamps(self, transcript_data, prompt):
-        """Get timestamps for clips relevant to the prompt using OpenAI API and real transcript timestamps."""
-        # Extract the plain text for the LLM prompt
-        if hasattr(transcript_data, 'text'):
-            plain_text = transcript_data.text
-        else:
-            plain_text = str(transcript_data)
-            
+        """Get timestamps for clips relevant to the prompt using Bedrock Claude."""
         logger.info(f"Getting clip timestamps for prompt: {prompt}")
-        logger.info(f"Transcript length: {len(plain_text)} characters")
         
-        # Extract segments with timestamps from the transcript data
-        segments = []
-        if hasattr(transcript_data, 'segments'):
-            segments = transcript_data.segments
-        elif isinstance(transcript_data, dict) and 'segments' in transcript_data:
-            segments = transcript_data['segments']
+        try:
+            # Extract clips using Bedrock Claude
+            clips_data = self.bedrock_client.extract_clips(transcript_data, prompt)
             
-        if not segments:
-            logger.warning("No timestamp segments found in transcript data. Using AI estimation instead.")
-            
-        # Prepare a better prompt that includes segment information
-        system_content = """You are a helpful assistant that identifies relevant sections in a video based on its transcript. 
-        Your task is to find sections that best match the user's topic or interest.
-        
-        Guidelines:
-        1. Use ONLY the exact timestamps from the transcript segments
-        2. Select sections that are most relevant to the topic
-        3. Include enough context around the topic
-        4. Avoid overlapping clips
-        5. Keep clips concise but meaningful
-        
-        Return each section as a JSON object with start_time, end_time, and text fields."""
-        
-        # Create a structured prompt with transcript segments
-        segments_text = ""
-        if segments:
-            for i, segment in enumerate(segments):
-                if hasattr(segment, 'start') and hasattr(segment, 'end') and hasattr(segment, 'text'):
-                    segments_text += f"[{segment.start:.2f} - {segment.end:.2f}] {segment.text}\n"
-                elif isinstance(segment, dict) and 'start' in segment and 'end' in segment and 'text' in segment:
-                    segments_text += f"[{segment['start']:.2f} - {segment['end']:.2f}] {segment['text']}\n"
-        
-        if segments_text:
-            user_content = f"""Given the following transcript with timestamps, identify sections that are most relevant to this topic: '{prompt}'.
-            
-            IMPORTANT:
-            - Use ONLY the exact timestamps from the transcript segments
-            - Select sections that best match the topic
-            - Include enough context around the topic
-            - Avoid overlapping clips
-            - Keep clips concise but meaningful
-            
-            Return each section as a JSON object with start_time and end_time in seconds, and the relevant text.
-            Format your entire response as a list of these objects under a 'clips' key.
-            
-            Timestamped Transcript:
-            {segments_text[:3000]}..."""
-        else:
-            # Fallback to using plain text if no segments are available
-            user_content = f"""Given the following transcript, identify sections that are most relevant to this topic: '{prompt}'.
-            
-            Return each section as a JSON object with start_time and end_time in seconds, and the relevant text.
-            Format your entire response as a list of these objects under a 'clips' key.
-            
-            Transcript:
-            {plain_text[:3000]}..."""
-            
-        logger.info(f"System prompt: {system_content}")
-        logger.info(f"User prompt (truncated): {user_content[:100]}...")
-        
-        # Use the correct v1.0+ client API format for chat completions
-        response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": user_content}
-            ],
-            response_format={"type": "json_object"}
-        )
-        
-        # Get the response content from the completion
-        response_content = response.choices[0].message.content
-        logger.info(f"Received response from OpenAI: {response_content[:100]}...")
-        
-        # Parse the response
-        clips_data = json.loads(response_content)
-        logger.info(f"Successfully parsed JSON response")
-        
-        if 'clips' not in clips_data:
-            error_msg = "Invalid response format: 'clips' key missing in API response"
-            logger.error(error_msg)
-            logger.error(f"Full response: {response_content}")
-            raise ValueError(error_msg)
-        
-        clips = []
-        for clip_data in clips_data.get('clips', []):
-            try:
-                # Validate clip data
-                if 'start_time' not in clip_data or 'end_time' not in clip_data or 'text' not in clip_data:
-                    logger.warning(f"Skipping invalid clip data, missing required fields: {clip_data}")
-                    continue
-                
-                # Validate clip duration
-                duration = float(clip_data['end_time']) - float(clip_data['start_time'])
-                if duration < 1.0:  # Skip clips shorter than 1 second
-                    logger.warning(f"Skipping clip too short ({duration:.2f}s): {clip_data}")
-                    continue
-                if duration > 300.0:  # Skip clips longer than 300 seconds / 5 minutes
-                    logger.warning(f"Skipping clip too long ({duration:.2f}s): {clip_data}")
-                    continue
+            clips = []
+            for clip_data in clips_data:
+                try:
+                    # Validate clip data
+                    if 'start_time' not in clip_data or 'end_time' not in clip_data or 'text' not in clip_data:
+                        logger.warning(f"Skipping invalid clip data, missing required fields: {clip_data}")
+                        continue
                     
-                clip = Clip(
-                    start_time=float(clip_data['start_time']),
-                    end_time=float(clip_data['end_time']),
-                    text=clip_data['text']
-                )
-                clips.append(clip)
-                logger.info(f"Added clip: {clip.start_time} - {clip.end_time} ({duration:.2f}s)")
-            except (KeyError, ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse clip data: {str(e)}")
-                logger.warning(f"Clip data: {clip_data}")
-                continue
-        
-        if not clips:
-            error_msg = "No valid clips found in API response"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+                    # Validate clip duration
+                    duration = float(clip_data['end_time']) - float(clip_data['start_time'])
+                    if duration < 1.0:  # Skip clips shorter than 1 second
+                        logger.warning(f"Skipping clip too short ({duration:.2f}s): {clip_data}")
+                        continue
+                    if duration > 30.0:  # Skip clips longer than 30 seconds
+                        logger.warning(f"Skipping clip too long ({duration:.2f}s): {clip_data}")
+                        continue
+                        
+                    clip = Clip(
+                        start_time=float(clip_data['start_time']),
+                        end_time=float(clip_data['end_time']),
+                        text=clip_data['text']
+                    )
+                    clips.append(clip)
+                    logger.info(f"Added clip: {clip.start_time} - {clip.end_time} ({duration:.2f}s)")
+                except (KeyError, ValueError, TypeError) as e:
+                    logger.warning(f"Failed to parse clip data: {str(e)}")
+                    logger.warning(f"Clip data: {clip_data}")
+                    continue
             
-        logger.info(f"Found {len(clips)} clips")
-        return clips
+            if not clips:
+                error_msg = "No valid clips found in API response"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+                
+            logger.info(f"Found {len(clips)} clips")
+            return clips
+            
+        except Exception as e:
+            logger.error(f"Failed to get clip timestamps: {str(e)}")
+            raise
     
     def extract_clips(self, job: Job):
         """Extract clips from the video based on timestamps."""

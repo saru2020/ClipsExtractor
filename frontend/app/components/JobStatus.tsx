@@ -17,7 +17,7 @@ interface JobStatusProps {
 
 export default function JobStatus({ jobId, onReset }: JobStatusProps) {
   const { data, error, loading } = useJobStatus(jobId, {
-    pollingInterval: 3000,
+    pollingInterval: 5000,
     stopPollingOnComplete: true,
   });
   
