@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Clips Extractor</title>
+  <style>
+    body {
+      width: 400px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .input-container {
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .input-container textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      resize: vertical;
+      min-height: 60px;
+    }
+    .input-container button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .input-container button#extract {
+      background-color: #2196F3;
+      color: white;
+    }
+    .input-container button#extract:hover {
+      background-color: #1976D2;
+    }
+    .input-container button#extract:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    .input-container button.start-over {
+      background-color: #f5f5f5;
+      color: #333;
+      border: 1px solid #e0e0e0;
+    }
+    .input-container button.start-over:hover {
+      background-color: #e0e0e0;
+    }
+    .clip-item {
+      padding: 8px;
+      margin: 8px 0;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .clip-item:hover {
+      background-color: #f5f5f5;
+    }
+    .timestamp {
+      color: #2196F3;
+      font-weight: bold;
+    }
+    .summary {
+      margin-top: 4px;
+      color: #333;
+    }
+    .status {
+      text-align: center;
+      color: #666;
+      padding: 20px;
+    }
+    .error {
+      color: #f44336;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .loading::after {
+      content: '';
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #2196F3;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="input-container">
+    <textarea id="prompt" placeholder="Enter what content you want to extract from this video..."></textarea>
+    <button id="extract">Extract Clips</button>
+  </div>
+  <div id="clips-container">
+    <div class="status">Please navigate to a YouTube video to see clips.</div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html> 
