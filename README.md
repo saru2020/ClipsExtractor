@@ -1,5 +1,8 @@
 # Clips Extractor
 
+![Clips Extractor](clips_extractor.png)
+
+
 Extract relevant clips from YouTube videos or other media sources based on your topic of interest.
 
 ## Features
@@ -9,6 +12,11 @@ Extract relevant clips from YouTube videos or other media sources based on your 
 - Provide extracted clips with timestamps and transcript
 - Combine relevant clips into a single video file
 - **Chrome Extension**: Extract clips directly while browsing YouTube. Tap on extracted content with its timestamp to play the video from that point. [See Chrome Extension Setup](./chrome-extension-setup.md)
+
+##Demo
+
+[![Clips Extractor Demo](clips_extractor_chrome_extension_webapp_demo.mp4)](clips_extractor_chrome_extension_webapp_demo.mp4)
+
 
 ## Architecture
 
