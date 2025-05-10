@@ -20,6 +20,30 @@ The application consists of:
 - **Storage**: AWS S3 for media storage
 - **Chrome Extension**: Integrates with YouTube to extract and play clips based on selected content
 
+## Quick Start (Single Command)
+
+You can start both the backend and frontend development servers with a single command using the provided shell script.
+
+### Prerequisites
+
+- Python 3.9+ (with venv and all backend dependencies installed)
+- Node.js 18+ and npm (with frontend dependencies installed)
+- FFmpeg installed on your system
+- Properly configured `.env` files for backend and frontend
+
+### Usage
+
+From the project root directory, run:
+
+```bash
+./start-dev.sh
+```
+
+This will:
+- Start the backend server (FastAPI) on port 8000
+- Start the frontend server (Next.js) on port 3000
+- Both processes will run in the background and shut down together when you stop the script (Ctrl+C)
+
 ## Setup Instructions
 
 ### Prerequisites
