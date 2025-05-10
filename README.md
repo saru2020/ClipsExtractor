@@ -15,8 +15,7 @@ Extract relevant clips from YouTube videos or other media sources based on your 
 
 ##Demo
 
-[![Clips Extractor Demo](clips_extractor_chrome_extension_webapp_demo.mp4)](clips_extractor_chrome_extension_webapp_demo.mp4)
-
+https://github.com/user-attachments/assets/7dba35cf-e9a3-43e4-8d47-8c8a52608d1d
 
 ## Architecture
 
