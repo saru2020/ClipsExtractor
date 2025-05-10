@@ -8,6 +8,7 @@ Extract relevant clips from YouTube videos or other media sources based on your 
 - Process media files based on user-provided topics
 - Provide extracted clips with timestamps and transcript
 - Combine relevant clips into a single video file
+- **Chrome Extension**: Extract clips directly while browsing YouTube. Tap on extracted content with its timestamp to play the video from that point. [See Chrome Extension Setup](./chrome-extension-setup.md)
 
 ## Architecture
 
@@ -17,6 +18,7 @@ The application consists of:
 - **Backend**: Python FastAPI application
 - **Media Processing**: FFmpeg, OpenAI Whisper for transcription, and GPT-4 for topic extraction
 - **Storage**: AWS S3 for media storage
+- **Chrome Extension**: Integrates with YouTube to extract and play clips based on selected content
 
 ## Setup Instructions
 
@@ -95,6 +97,10 @@ The application consists of:
    ```
 
 5. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+
+## Chrome Extension
+
+The Chrome extension allows you to extract and play relevant clips directly on YouTube. Tapping on the extracted content with its timestamp will play the video from that point. For setup and usage instructions, see [Chrome Extension Setup](./chrome-extension-setup.md).
 
 ## OpenAI API Configuration
 
